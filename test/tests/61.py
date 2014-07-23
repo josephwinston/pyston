@@ -1,4 +1,4 @@
-# varargs (but not starargs yet)
+# varargs
 
 def f(*args):
     print args

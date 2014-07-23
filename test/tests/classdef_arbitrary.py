@@ -24,6 +24,7 @@ class C(object):
         pass
 
     [123]
+print C.__module__
 
 class D(object):
     x = 1

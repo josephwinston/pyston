@@ -1,19 +1,21 @@
 // Copyright (c) 2014 Dropbox, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <cstdlib>
+#include "core/util.h"
+
 #include <cstdio>
+#include <cstdlib>
 
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormattedStream.h"
@@ -21,23 +23,29 @@
 #include "core/common.h"
 #include "core/options.h"
 
-#include "core/util.h"
-
 namespace pyston {
 
 int Timer::level = 0;
-Timer::Timer(const char* desc, int min_usec) : min_usec(min_usec), ended(true) {
+
+Timer::Timer(const char* desc) : min_usec(-1), ended(true) {
+    restart(desc);
+}
+Timer::Timer(const char* desc, long min_usec) : min_usec(min_usec), ended(true) {
     restart(desc);
 }
 
-void Timer::restart(const char* newdesc, int min_usec) {
+void Timer::restart(const char* newdesc) {
     assert(ended);
 
     desc = newdesc;
-    this->min_usec = min_usec;
     gettimeofday(&start_time, NULL);
     Timer::level++;
     ended = false;
+}
+
+void Timer::restart(const char* newdesc, long new_min_usec) {
+    this->min_usec = new_min_usec;
+    restart(newdesc);
 }
 
 long Timer::end() {
@@ -74,7 +82,7 @@ Timer::~Timer() {
     end();
 }
 
-bool startswith(const std::string &s, const std::string &pattern) {
+bool startswith(const std::string& s, const std::string& pattern) {
     if (s.size() == 0)
         return pattern.size() == 0;
     return s.compare(0, pattern.size(), pattern) == 0;
@@ -100,7 +108,8 @@ void removeDirectoryIfExists(const std::string& path) {
         if (llvm::sys::fs::is_directory(status)) {
             removeDirectoryIfExists(it->path());
         } else {
-            llvm::errs() << "Removing file " << it->path() << '\n';
+            if (VERBOSITY())
+                llvm::errs() << "Removing file " << it->path() << '\n';
             code = llvm::sys::fs::remove(it->path(), false);
             assert(!code);
         }
@@ -109,9 +118,9 @@ void removeDirectoryIfExists(const std::string& path) {
         assert(!code);
     }
 
-    llvm::errs() << "Removing directory " << path << '\n';
+    if (VERBOSITY())
+        llvm::errs() << "Removing directory " << path << '\n';
     code = llvm::sys::fs::remove(path, false);
     assert(!code);
 }
-
 }

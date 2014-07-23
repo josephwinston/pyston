@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Dropbox, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,12 +18,10 @@
 #include "core/common.h"
 #include "core/options.h"
 #include "core/types.h"
-
+#include "gc/gc_alloc.h"
 #include "runtime/gc_runtime.h"
 #include "runtime/objmodel.h"
 #include "runtime/types.h"
-
-#include "gc/gc_alloc.h"
 
 #define USE_CUSTOM_ALLOC
 
@@ -46,7 +44,7 @@ void* rt_alloc(size_t size) {
 #endif
 
 #ifndef NDEBUG
-    //nallocs++;
+// nallocs++;
 #endif
 #ifdef DEBUG_GC
     getAlive()->insert(ptr);
@@ -70,7 +68,7 @@ void* rt_realloc(void* ptr, size_t new_size) {
 
 void rt_free(void* ptr) {
 #ifndef NDEBUG
-    //nallocs--;
+// nallocs--;
 #endif
 #ifdef DEBUG_GC
     getAlive()->erase(ptr);
@@ -82,7 +80,7 @@ void rt_free(void* ptr) {
     free(ptr);
 #endif
 
-    //assert(nallocs >= 0);
+    // assert(nallocs >= 0);
 }
 
 void gc_teardown() {
@@ -92,8 +90,8 @@ void gc_teardown() {
 #ifdef DEBUG_GC
         AliveSet *alive = getAlive();
         assert(nallocs == alive->size());
-        for (AliveSet::iterator it = alive->begin(), end = alive->end(); it != end; ++it) {
-            printf("%p\n", *it);
+        for (void* p : alive) {
+            printf("%p\n", p);
         }
 #endif
         // This will scan through the heap and alert us about things that
@@ -104,5 +102,4 @@ void gc_teardown() {
     }
     */
 }
-
 }

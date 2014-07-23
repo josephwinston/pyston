@@ -6,9 +6,15 @@ Pyston is a new, under-development Python implementation built using LLVM and mo
 
 Pyston "works", though doesn't support very much of the Python language, and currently is not very useful for end-users.
 
-Pyston currently targets Python 2.7, and only runs on x86_64 platforms, and has only been tested on Ubuntu.
+Currently, Pyston targets Python 2.7, only runs on x86_64 platforms, and only has been tested on Ubuntu.  Support for more platforms -- along with Python 3 compatibility -- is planned for the future, but this is the initial target due to the fact that Dropbox is on this setup internally.
+
+> Note: Pyston does not currently work on Mac OSX, but is being actively worked on; stay tuned on [pyston-dev](http://lists.pyston.org/cgi-bin/mailman/listinfo/pyston-dev) to hear when it does.
 
 Benchmarks are not currently that meaningful since the supported set of benchmarks is too small to be representative; with that caveat, Pyston seems to have better performance than CPython but lags behind PyPy.
+
+##### Contributing
+
+Pyston welcomes any kind of contribution; please see [CONTRIBUTING.md](https://github.com/dropbox/pyston/blob/master/CONTRIBUTING.md) for details.
 
 ### Roadmap
 
@@ -33,24 +39,30 @@ Pyston is still an early-stage project so it is hard to project with much certai
 - Threading (hopefully without a GIL)
 - Adding support for Python 3, for non-x86_64 platforms
 
+### Contributing
+
+To contribute to Pyston, you need to to sign the [Dropbox Contributor License Agreement](https://opensource.dropbox.com/cla/), if you haven't already.
+
 ### Getting started
 
-To get a full development environment for Pyston, you need pretty recent versions of various tools, since self-modifying code tends to be less well supported.  The docs/INSTALLING file contains information about what the tools are, how to get them, and how to install them; currently it can take up to an hour to get them all built on a quad-core machine.
+To get a full development environment for Pyston, you need pretty recent versions of various tools, since self-modifying code tends to be less well supported.  The docs/INSTALLING.md file contains information about what the tools are, how to get them, and how to install them; currently it can take up to an hour to get them all built on a quad-core machine.
 
-To simply build and run Pyston, a smaller set of dependencies is required; see docs/INSTALLING, but skip the "OPTIONAL DEPENDENCIES" section. Once all the dependencies are installed, you should be able to do
+To simply build and run Pyston, a smaller set of dependencies is required; see docs/INSTALLING.md, but skip the "OPTIONAL DEPENDENCIES" section. Once all the dependencies are installed, you should be able to do
 ```
-$ make test -j4
+$ make check -j4
 ```
 
 And see that hopefully all of the tests will pass.
 
 ### Running Pyston
 
-Pyston builds in a few different configurations; right now there is "pyston_dbg", which is the debug configuration and contains assertions and debug symbols, and "pyston", the release configuration which has no assertions or debug symbols, and has full optimizations.  You can build them by saying `make pyston_dbg` or `make pyston`, respectively.  If you are interested in seeing how fast Pyston can go, you should try the release configuration, but there is a good chance that it will crash, in which case you can run the debug configuration to see what is happening.
+Pyston builds in a few different configurations; right now there is `pyston_dbg`, which is the debug configuration and contains assertions and debug symbols, and `pyston`, the release configuration which has no assertions or debug symbols, and has full optimizations.  You can build them by saying `make pyston_dbg` or `make pyston`, respectively.  If you are interested in seeing how fast Pyston can go, you should try the release configuration, but there is a good chance that it will crash, in which case you can run the debug configuration to see what is happening.
 
 > There are a number of other configurations useful for development: "pyston_debug" contains full LLVM debug information, but can be over 100MB.  "pyston_prof" contains gprof-style profiling instrumentation; gprof can't profile JIT'd code, reducing it's usefulness in this case, but the configuration has stuck around since it gets compiled with gcc, and can expose issues with the normal clang-based build.
 
 You can get a simple REPL by simply typing `./pyston`; it is not very robust right now, and only supports single-line statements, but can give you an interactive view into how Pyston works.  To get more functionality, you can do `./pyston -i [your_source_file.py]`, which will go into the REPL after executing the given file, letting you access all the variables you had defined.
+
+To run the tests, run `make test`.
 
 #### Command-line options:
 <dl>
@@ -103,6 +115,7 @@ Initial Release.
 ### Compilation tiers
 
 Pyston currently features four compilation tiers.  In increasing order of speed, but also compilation time:
+
 1. An LLVM-IR interpreter.  LLVM IR is not designed for interpretation, and isn't very well suited for the task -- it is too low level, and the interpreter spends too much time dispatching for each instruction.  The interpreter is currently used for the first three times that a function is called, or the first ten iterations of a loop, before switching to the next level.
 2. Baseline LLVM compilation.  Runs no LLVM optimizations, and no type speculation, and simply hands off the generated code to the LLVM code generator.  This tier does type recording for the final tier.
 3. Improved LLVM compilation.  Behaves very similarly to baseline LLVM compilation, so this tier will probably be removed in the near future.
@@ -130,7 +143,7 @@ def square(n):
         r += n
     return r
 ```
-Will get translated to something similar to:
+will get translated to something similar to:
 ```C
 static _backedge_trip_count = 0;
 int square(int n) {

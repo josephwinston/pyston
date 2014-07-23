@@ -1,43 +1,28 @@
 // Copyright (c) 2014 Dropbox, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "asm_writing/assembler.h"
+
 #include <cstring>
 
 #include "core/common.h"
-
-#include "asm_writing/assembler.h"
 
 namespace pyston {
 namespace assembler {
 
 const char* regnames[] = {
-    "rax",
-    "rcx",
-    "rdx",
-    "rbx",
-    "rsp",
-    "rbp",
-    "rsi",
-    "rdi",
-    "r8",
-    "r9",
-    "r10",
-    "r11",
-    "r12",
-    "r13",
-    "r14",
-    "r15",
+    "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
 };
 
 void Register::dump() const {
@@ -85,10 +70,10 @@ GenericRegister GenericRegister::fromDwarf(int dwarf_regnum) {
 
 
 void Assembler::emitArith(Immediate imm, Register r, int opcode) {
-    //assert(r != RSP && "This breaks unwinding, please don't use.");
+    // assert(r != RSP && "This breaks unwinding, please don't use.");
 
     int64_t amount = imm.val;
-    RELEASE_ASSERT(-0x80 <= amount && amount < 0x80 && "unsupported", "");
+    RELEASE_ASSERT((-1L << 31) <= amount && amount < (1L << 31) - 1, "");
     assert(0 <= opcode && opcode < 8);
 
     int rex = REX_W;
@@ -100,9 +85,15 @@ void Assembler::emitArith(Immediate imm, Register r, int opcode) {
     }
 
     emitRex(rex);
-    emitByte(0x83);
-    emitModRM(0b11, opcode, reg_idx);
-    emitByte(amount);
+    if (-0x80 <= amount && amount < 0x80) {
+        emitByte(0x83);
+        emitModRM(0b11, opcode, reg_idx);
+        emitByte(amount);
+    } else {
+        emitByte(0x81);
+        emitModRM(0b11, opcode, reg_idx);
+        emitInt(amount, 4);
+    }
 }
 
 
@@ -112,13 +103,14 @@ void Assembler::emitByte(uint8_t b) {
     ++addr;
 }
 
-void Assembler::emitInt(uint64_t n, int bytes) {
+void Assembler::emitInt(int64_t n, int bytes) {
     assert(bytes > 0 && bytes <= 8);
+    assert((-1L << (8 * bytes - 1)) <= n && n <= ((1L << (8 * bytes - 1)) - 1));
     for (int i = 0; i < bytes; i++) {
         emitByte(n & 0xff);
         n >>= 8;
     }
-    assert(n == 0);
+    ASSERT(n == 0 || n == -1, "%ld", n);
 }
 
 void Assembler::emitRex(uint8_t rex) {
@@ -141,7 +133,6 @@ void Assembler::emitSIB(uint8_t scalebits, uint8_t index, uint8_t base) {
 
 
 
-
 void Assembler::mov(Immediate val, Register dest) {
     int rex = REX_W;
 
@@ -158,7 +149,7 @@ void Assembler::mov(Immediate val, Register dest) {
 
 void Assembler::movq(Immediate src, Indirect dest) {
     int64_t src_val = src.val;
-    assert((-1L<<31) <= src_val && src_val < (1L<<31)-1);
+    assert((-1L << 31) <= src_val && src_val < (1L << 31) - 1);
 
     int rex = REX_W;
 
@@ -417,7 +408,7 @@ void Assembler::movsd(Indirect src, XMMRegister dest) {
 
 
 void Assembler::push(Register reg) {
-    //assert(0 && "This breaks unwinding, please don't use.");
+    // assert(0 && "This breaks unwinding, please don't use.");
 
     assert(reg != RSP); // this might work but most likely a bug
 
@@ -432,7 +423,7 @@ void Assembler::push(Register reg) {
 }
 
 void Assembler::pop(Register reg) {
-    //assert(0 && "This breaks unwinding, please don't use.");
+    // assert(0 && "This breaks unwinding, please don't use.");
 
     assert(reg != RSP); // this might work but most likely a bug
 
@@ -463,7 +454,6 @@ void Assembler::inc(Register reg) {
 void Assembler::inc(Indirect mem) {
     UNIMPLEMENTED();
 }
-
 
 
 
@@ -502,7 +492,7 @@ void Assembler::cmp(Register reg1, Register reg2) {
 
 void Assembler::cmp(Register reg, Immediate imm) {
     int64_t val = imm.val;
-    assert((-1L<<31) <= val && val < (1L<<31)-1);
+    assert((-1L << 31) <= val && val < (1L << 31) - 1);
 
     int reg_idx = reg.regnum;
 
@@ -521,7 +511,7 @@ void Assembler::cmp(Register reg, Immediate imm) {
 
 void Assembler::cmp(Indirect mem, Immediate imm) {
     int64_t val = imm.val;
-    assert((-1L<<31) <= val && val < (1L<<31)-1);
+    assert((-1L << 31) <= val && val < (1L << 31) - 1);
 
     int src_idx = mem.base.regnum;
 
@@ -606,7 +596,8 @@ void Assembler::jmp_cond(JumpDestination dest, ConditionCode condition) {
 
     assert(dest.type == JumpDestination::FROM_START);
     int offset = dest.offset - (addr - start_addr) - 2;
-    if (unlikely) offset--;
+    if (unlikely)
+        offset--;
 
     if (offset >= -0x80 && offset < 0x80) {
         if (unlikely)
@@ -680,11 +671,11 @@ uint8_t* Assembler::emitCall(void* ptr, Register scratch) {
     return addr;
 }
 
-void Assembler::emitBatchPush(StackInfo stack_info, const std::vector<GenericRegister> &to_push) {
+void Assembler::emitBatchPush(StackInfo stack_info, const std::vector<GenericRegister>& to_push) {
     assert(stack_info.has_scratch);
     int offset = 0;
 
-    for (const GenericRegister &r : to_push) {
+    for (const GenericRegister& r : to_push) {
         assert(stack_info.scratch_bytes >= offset + 8);
         Indirect next_slot(RBP, offset + stack_info.scratch_rbp_offset);
 
@@ -703,11 +694,11 @@ void Assembler::emitBatchPush(StackInfo stack_info, const std::vector<GenericReg
     }
 }
 
-void Assembler::emitBatchPop(StackInfo stack_info, const std::vector<GenericRegister> &to_push) {
+void Assembler::emitBatchPop(StackInfo stack_info, const std::vector<GenericRegister>& to_push) {
     assert(stack_info.has_scratch);
     int offset = 0;
 
-    for (const GenericRegister &r : to_push) {
+    for (const GenericRegister& r : to_push) {
         assert(stack_info.scratch_bytes >= offset + 8);
         Indirect next_slot(RBP, offset + stack_info.scratch_rbp_offset);
 
@@ -746,16 +737,17 @@ void Assembler::emitAnnotation(int num) {
 
 
 
-uint8_t* initializePatchpoint2(uint8_t* start_addr, uint8_t* slowpath_start, uint8_t* end_addr, StackInfo stack_info, const std::unordered_set<int> &live_outs) {
+uint8_t* initializePatchpoint2(uint8_t* start_addr, uint8_t* slowpath_start, uint8_t* end_addr, StackInfo stack_info,
+                               const std::unordered_set<int>& live_outs) {
     assert(start_addr < slowpath_start);
     static const int INITIAL_CALL_SIZE = 13;
     assert(end_addr > slowpath_start + INITIAL_CALL_SIZE);
 #ifndef NDEBUG
-    //if (VERBOSITY()) printf("initializing patchpoint at %p - %p\n", addr, addr + size);
-    //for (int i = 0; i < size; i++) {
-        //printf("%02x ", *(addr + i));
+    // if (VERBOSITY()) printf("initializing patchpoint at %p - %p\n", addr, addr + size);
+    // for (int i = 0; i < size; i++) {
+    // printf("%02x ", *(addr + i));
     //}
-    //printf("\n");
+    // printf("\n");
 
     // Check the exact form of the patchpoint call.
     // It's important to make sure that the only live registers
@@ -799,8 +791,8 @@ uint8_t* initializePatchpoint2(uint8_t* start_addr, uint8_t* slowpath_start, uin
 
     Assembler assem(slowpath_start, end_addr - slowpath_start);
 
-    //if (regs_to_spill.size())
-        //assem.trap();
+    // if (regs_to_spill.size())
+    // assem.trap();
     assem.emitBatchPush(stack_info, regs_to_spill);
     uint8_t* rtn = assem.emitCall(call_addr, R11);
     assem.emitBatchPop(stack_info, regs_to_spill);
@@ -808,6 +800,5 @@ uint8_t* initializePatchpoint2(uint8_t* start_addr, uint8_t* slowpath_start, uin
 
     return rtn;
 }
-
 }
 }

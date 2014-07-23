@@ -118,14 +118,12 @@ def convert(n, f):
         else:
             raise Exception(type(n.n))
 
-    # print n, sorted(n.__dict__.items())
+    # print >>sys.stderr, n, sorted(n.__dict__.items())
     for k, v in sorted(n.__dict__.items()):
         if k.startswith('_'):
             continue
 
-        if k == "vararg" and v is None:
-            v = ""
-        if k == "asname" and v is None:
+        if k in ("vararg", "kwarg", "asname") and v is None:
             v = ""
         # elif k in ('col_offset', 'lineno'):
             # continue

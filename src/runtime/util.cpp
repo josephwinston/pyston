@@ -1,32 +1,33 @@
 // Copyright (c) 2014 Dropbox, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "core/options.h"
-
-#include "runtime/types.h"
 #include "runtime/util.h"
+
+#include "core/options.h"
+#include "runtime/objmodel.h"
+#include "runtime/types.h"
 
 namespace pyston {
 
-void parseSlice(BoxedSlice* slice, int size, i64 *out_start, i64 *out_stop, i64 *out_step) {
-    BoxedSlice *sslice = static_cast<BoxedSlice*>(slice);
+void parseSlice(BoxedSlice* slice, int size, i64* out_start, i64* out_stop, i64* out_step) {
+    BoxedSlice* sslice = static_cast<BoxedSlice*>(slice);
 
-    Box *start = sslice->start;
+    Box* start = sslice->start;
     assert(start);
-    Box *stop = sslice->stop;
+    Box* stop = sslice->stop;
     assert(stop);
-    Box *step = sslice->step;
+    Box* step = sslice->step;
     assert(step);
 
     RELEASE_ASSERT(start->cls == int_cls || start->cls == none_cls, "");
@@ -64,7 +65,7 @@ void parseSlice(BoxedSlice* slice, int size, i64 *out_start, i64 *out_stop, i64 
 
     if (istep == 0) {
         fprintf(stderr, "ValueError: slice step cannot be zero\n");
-        raiseExc();
+        raiseExcHelper(ValueError, "");
     }
 
     if (istep > 0) {
@@ -74,7 +75,7 @@ void parseSlice(BoxedSlice* slice, int size, i64 *out_start, i64 *out_stop, i64 
             istop = size;
     } else {
         if (istart >= size)
-            istart = size-1;
+            istart = size - 1;
         if (istop < 0)
             istop = -1;
     }
@@ -83,5 +84,4 @@ void parseSlice(BoxedSlice* slice, int size, i64 *out_start, i64 *out_stop, i64 
     *out_stop = istop;
     *out_step = istep;
 }
-
 }

@@ -1,45 +1,34 @@
 // Copyright (c) 2014 Dropbox, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "asm_writing/rewriter2.h"
+
 #include <vector>
 
+#include "asm_writing/icinfo.h"
 #include "core/common.h"
 #include "core/stats.h"
-
-#include "asm_writing/icinfo.h"
-#include "asm_writing/rewriter2.h"
 
 namespace pyston {
 
 
 static const assembler::Register allocatable_regs[] = {
-    assembler::RAX,
-    assembler::RCX,
-    assembler::RBX,
-    assembler::RDX,
+    assembler::RAX, assembler::RCX, assembler::RBX, assembler::RDX,
     // no RSP
     // no RBP
-    assembler::RDI,
-    assembler::RSI,
-    assembler::R8,
-    assembler::R9,
-    assembler::R10,
-    assembler::R11,
-    assembler::R12,
-    assembler::R13,
-    assembler::R14,
-    assembler::R15,
+    assembler::RDI, assembler::RSI, assembler::R8,  assembler::R9,  assembler::R10,
+    assembler::R11, assembler::R12, assembler::R13, assembler::R14, assembler::R15,
 };
 
 
@@ -63,8 +52,8 @@ Location Location::forArg(int argnum) {
             break;
     }
     RELEASE_ASSERT(0, "the following is untested");
-    //int offset = (argnum - 6) * 8;
-    //return Location(Stack, offset);
+    // int offset = (argnum - 6) * 8;
+    // return Location(Stack, offset);
 }
 
 assembler::Register Location::asRegister() const {
@@ -88,6 +77,9 @@ bool Location::isClobberedByCall() const {
     if (type == Scratch)
         return false;
 
+    if (type == Constant)
+        return false;
+
     RELEASE_ASSERT(0, "%d", type);
 }
 
@@ -107,12 +99,17 @@ void Location::dump() const {
         return;
     }
 
+    if (type == Constant) {
+        printf("imm(%d)\n", constant_val);
+        return;
+    }
+
     RELEASE_ASSERT(0, "%d", type);
 }
 
 
 
-RewriterVarUsage2::RewriterVarUsage2(RewriterVar2 *var) : var(var), done_using(false) {
+RewriterVarUsage2::RewriterVarUsage2(RewriterVar2* var) : var(var), done_using(false) {
     assert(var->rewriter);
 }
 
@@ -124,7 +121,7 @@ void RewriterVarUsage2::addAttrGuard(int offset, uint64_t val) {
     assertValid();
 
     assembler::Register this_reg = var->getInReg();
-    if (val < (-1L<<31) || val >= (1L<<31) - 1) {
+    if (val < (-1L << 31) || val >= (1L << 31) - 1) {
         assembler::Register reg = rewriter->allocReg(Location::any());
         assembler->mov(assembler::Immediate(val), reg);
         assembler->cmp(assembler::Indirect(this_reg, offset), reg);
@@ -141,7 +138,7 @@ RewriterVarUsage2 RewriterVarUsage2::getAttr(int offset, KillFlag kill, Location
     assembler::Register this_reg = var->getInReg();
     Rewriter2* rewriter = var->rewriter;
 
-    if (kill) {
+    if (kill == Kill) {
         setDoneUsing();
     }
 
@@ -179,9 +176,10 @@ void RewriterVarUsage2::setDoneUsing() {
     assertValid();
     done_using = true;
     var->decUse();
+    var = NULL;
 }
 
-RewriterVarUsage2::RewriterVarUsage2(RewriterVarUsage2 &&usage) {
+RewriterVarUsage2::RewriterVarUsage2(RewriterVarUsage2&& usage) {
     assert(!usage.done_using);
     assert(usage.var != NULL);
 
@@ -192,7 +190,7 @@ RewriterVarUsage2::RewriterVarUsage2(RewriterVarUsage2 &&usage) {
     usage.done_using = true;
 }
 
-RewriterVarUsage2& RewriterVarUsage2::operator=(RewriterVarUsage2 &&usage) {
+RewriterVarUsage2& RewriterVarUsage2::operator=(RewriterVarUsage2&& usage) {
     assert(done_using);
     assert(var == NULL);
     assert(!usage.done_using);
@@ -207,7 +205,13 @@ RewriterVarUsage2& RewriterVarUsage2::operator=(RewriterVarUsage2 &&usage) {
     return *this;
 }
 
-assembler::Immediate RewriterVar2::tryGetAsImmediate(bool *is_immediate) {
+void RewriterVar2::dump() {
+    printf("RewriterVar2 at %p: %d uses.  %ld locations:\n", this, num_uses, locations.size());
+    for (Location l : locations)
+        l.dump();
+}
+
+assembler::Immediate RewriterVar2::tryGetAsImmediate(bool* is_immediate) {
     for (Location l : locations) {
         if (l.type == Location::Constant) {
             *is_immediate = true;
@@ -221,9 +225,9 @@ assembler::Immediate RewriterVar2::tryGetAsImmediate(bool *is_immediate) {
 assembler::Register RewriterVar2::getInReg(Location dest) {
     assert(dest.type == Location::Register || dest.type == Location::AnyReg);
 
-    //assembler::Register reg = var->rewriter->allocReg(l);
-    //var->rewriter->addLocationToVar(var, reg);
-    //return reg;
+    // assembler::Register reg = var->rewriter->allocReg(l);
+    // var->rewriter->addLocationToVar(var, reg);
+    // return reg;
     assert(locations.size());
 #ifndef NDEBUG
     for (Location l : locations) {
@@ -347,7 +351,7 @@ void Rewriter2::setDoneGuarding() {
     assert(!done_guarding);
     done_guarding = true;
 
-    for (RewriterVar2 *var : args) {
+    for (RewriterVar2* var : args) {
         var->decUse();
     }
     args.clear();
@@ -371,7 +375,7 @@ void Rewriter2::trap() {
 }
 
 RewriterVarUsage2 Rewriter2::loadConst(int64_t val, Location dest) {
-    if (val >= (-1L<<31) && val < (1L<<31) - 1) {
+    if (val >= (-1L << 31) && val < (1L << 31) - 1) {
         Location l(Location::Constant, val);
         return createNewVar(l);
     }
@@ -389,40 +393,20 @@ RewriterVarUsage2 Rewriter2::call(bool can_call_into_python, void* func_addr, Re
     return call(can_call_into_python, func_addr, std::move(args));
 }
 
-RewriterVarUsage2 Rewriter2::call(bool can_call_into_python, void* func_addr, RewriterVarUsage2 arg0, RewriterVarUsage2 arg1) {
+RewriterVarUsage2 Rewriter2::call(bool can_call_into_python, void* func_addr, RewriterVarUsage2 arg0,
+                                  RewriterVarUsage2 arg1) {
     std::vector<RewriterVarUsage2> args;
     args.push_back(std::move(arg0));
     args.push_back(std::move(arg1));
     return call(can_call_into_python, func_addr, std::move(args));
 }
 
-static const Location caller_save_registers[] {
-    assembler::RAX,
-    assembler::RCX,
-    assembler::RDX,
-    assembler::RSI,
-    assembler::RDI,
-    assembler::R8,
-    assembler::R9,
-    assembler::R10,
-    assembler::R11,
-
-    assembler::XMM0,
-    assembler::XMM1,
-    assembler::XMM2,
-    assembler::XMM3,
-    assembler::XMM4,
-    assembler::XMM5,
-    assembler::XMM6,
-    assembler::XMM7,
-    assembler::XMM8,
-    assembler::XMM9,
-    assembler::XMM10,
-    assembler::XMM11,
-    assembler::XMM12,
-    assembler::XMM13,
-    assembler::XMM14,
-    assembler::XMM15,
+static const Location caller_save_registers[]{
+    assembler::RAX,   assembler::RCX,   assembler::RDX,   assembler::RSI,   assembler::RDI,
+    assembler::R8,    assembler::R9,    assembler::R10,   assembler::R11,   assembler::XMM0,
+    assembler::XMM1,  assembler::XMM2,  assembler::XMM3,  assembler::XMM4,  assembler::XMM5,
+    assembler::XMM6,  assembler::XMM7,  assembler::XMM8,  assembler::XMM9,  assembler::XMM10,
+    assembler::XMM11, assembler::XMM12, assembler::XMM13, assembler::XMM14, assembler::XMM15,
 };
 
 RewriterVarUsage2 Rewriter2::call(bool can_call_into_python, void* func_addr, std::vector<RewriterVarUsage2> args) {
@@ -430,41 +414,73 @@ RewriterVarUsage2 Rewriter2::call(bool can_call_into_python, void* func_addr, st
 
     assertChangesOk();
 
-    //RewriterVarUsage2 scratch = createNewVar(Location::any());
+    // RewriterVarUsage2 scratch = createNewVar(Location::any());
     assembler::Register r = allocReg(assembler::R11);
 
     for (int i = 0; i < args.size(); i++) {
         Location l(Location::forArg(i));
-        RewriterVar2 *var = args[i].var;
+        RewriterVar2* var = args[i].var;
+
+        // printf("%d ", i);
+        // var->dump();
         if (!var->isInLocation(l)) {
             assembler::Register r = l.asRegister();
 
-            assembler::Register r2 = allocReg(l);
-            assert(r == r2);
-            assert(vars_by_location.count(l) == 0);
+            {
+                // this forces the register allocator to spill this register:
+                assembler::Register r2 = allocReg(l);
+                assert(r == r2);
+                assert(vars_by_location.count(l) == 0);
+            }
 
+            // FIXME: get rid of tryGetAsImmediate
+            // instead do that work here; ex this could be a stack location
             bool is_immediate;
             assembler::Immediate imm = var->tryGetAsImmediate(&is_immediate);
 
-            assert(is_immediate);
-            assembler->mov(imm, r);
-            addLocationToVar(var, l);
+            if (is_immediate) {
+                assembler->mov(imm, r);
+                addLocationToVar(var, l);
+            } else {
+                assembler::Register r2 = var->getInReg(l);
+                assert(var->locations.count(r2));
+                assert(r2 == r);
+            }
         }
 
         assert(var->isInLocation(Location::forArg(i)));
+    }
+
+#ifndef NDEBUG
+    for (int i = 0; i < args.size(); i++) {
+        RewriterVar2* var = args[i].var;
+        if (!var->isInLocation(Location::forArg(i))) {
+            var->dump();
+        }
+        assert(var->isInLocation(Location::forArg(i)));
+    }
+#endif
+
+    // This is kind of hacky: we release the use of these right now,
+    // and then expect that everything else will not clobber any of the arguments.
+    // Naively moving this below the reg spilling will always spill the arguments;
+    // but sometimes you need to do that if the argument lives past the call.
+    // Hacky, but the right way to do it requires a bit of reworking so that it can
+    // spill but keep its current use.
+    for (int i = 0; i < args.size(); i++) {
         args[i].setDoneUsing();
     }
 
     // Spill caller-saved registers:
     for (auto check_reg : caller_save_registers) {
-        //check_reg.dump();
+        // check_reg.dump();
         assert(check_reg.isClobberedByCall());
 
         auto it = vars_by_location.find(check_reg);
         if (it == vars_by_location.end())
             continue;
 
-        RewriterVar2 *var = it->second;
+        RewriterVar2* var = it->second;
         bool need_to_spill = true;
         for (Location l : var->locations) {
             if (!l.isClobberedByCall()) {
@@ -487,13 +503,15 @@ RewriterVarUsage2 Rewriter2::call(bool can_call_into_python, void* func_addr, st
     }
 
 #ifndef NDEBUG
-    for (auto p : vars_by_location) {
+    for (const auto& p : vars_by_location) {
         Location l = p.first;
-        //l.dump();
+        // l.dump();
+        if (l.isClobberedByCall()) {
+            p.second->dump();
+        }
         assert(!l.isClobberedByCall());
     }
 #endif
-
 
     assembler->mov(assembler::Immediate(func_addr), r);
     assembler->callq(r);
@@ -508,17 +526,17 @@ void Rewriter2::commit() {
     rewriter2_commits.log();
 
     assert(done_guarding && "Could call setDoneGuarding for you, but probably best to do it yourself");
-    //if (!done_guarding)
-        //setDoneGuarding();
+    // if (!done_guarding)
+    // setDoneGuarding();
 
     assert(live_out_regs.size() == live_outs.size());
     for (int i = 0; i < live_outs.size(); i++) {
         assembler::GenericRegister ru = assembler::GenericRegister::fromDwarf(live_out_regs[i]);
         Location expected(ru);
 
-        RewriterVar2 *var = live_outs[i];
-        //for (Location l : var->locations) {
-            //printf("%d %d\n", l.type, l._data);
+        RewriterVar2* var = live_outs[i];
+        // for (Location l : var->locations) {
+        // printf("%d %d\n", l.type, l._data);
         //}
         if (!var->isInLocation(expected)) {
             assert(vars_by_location.count(expected) == 0);
@@ -568,11 +586,11 @@ void Rewriter2::commitReturning(RewriterVarUsage2 usage) {
     commit();
 }
 
-void Rewriter2::addDependenceOn(ICInvalidator &invalidator) {
+void Rewriter2::addDependenceOn(ICInvalidator& invalidator) {
     rewrite->addDependenceOn(invalidator);
 }
 
-void Rewriter2::kill(RewriterVar2 *var) {
+void Rewriter2::kill(RewriterVar2* var) {
     for (Location l : var->locations) {
         assert(vars_by_location[l] == var);
         vars_by_location.erase(l);
@@ -600,7 +618,7 @@ assembler::Indirect Rewriter2::indirectFor(Location l) {
 void Rewriter2::spillRegister(assembler::Register reg) {
     assert(done_guarding);
 
-    RewriterVar2 *var = vars_by_location[reg];
+    RewriterVar2* var = vars_by_location[reg];
     assert(var);
 
     // First, try to spill into a callee-save register:
@@ -626,7 +644,7 @@ void Rewriter2::spillRegister(assembler::Register reg) {
 void Rewriter2::spillRegister(assembler::XMMRegister reg) {
     assert(done_guarding);
 
-    RewriterVar2 *var = vars_by_location[reg];
+    RewriterVar2* var = vars_by_location[reg];
     assert(var);
 
     assert(var->locations.size() == 1);
@@ -659,15 +677,18 @@ assembler::Register Rewriter2::allocReg(Location dest) {
     }
 }
 
-void Rewriter2::addLocationToVar(RewriterVar2 *var, Location l) {
+void Rewriter2::addLocationToVar(RewriterVar2* var, Location l) {
     assert(!var->isInLocation(l));
     assert(vars_by_location.count(l) == 0);
+
+    ASSERT(l.type == Location::Register || l.type == Location::XMMRegister || l.type == Location::Scratch, "%d",
+           l.type);
 
     var->locations.insert(l);
     vars_by_location[l] = var;
 }
 
-void Rewriter2::removeLocationFromVar(RewriterVar2 *var, Location l) {
+void Rewriter2::removeLocationFromVar(RewriterVar2* var, Location l) {
     assert(var->isInLocation(l));
     assert(vars_by_location[l] = var);
 
@@ -676,21 +697,25 @@ void Rewriter2::removeLocationFromVar(RewriterVar2 *var, Location l) {
 }
 
 RewriterVarUsage2 Rewriter2::createNewVar(Location dest) {
-    RewriterVar2* &var = vars_by_location[dest];
+    RewriterVar2*& var = vars_by_location[dest];
     assert(!var);
 
     var = new RewriterVar2(this, dest);
     return var;
 }
 
-Rewriter2::Rewriter2(ICSlotRewrite* rewrite, int num_args, const std::vector<int> &live_outs) :
-            rewrite(rewrite), assembler(rewrite->getAssembler()),
-            return_location(rewrite->returnRegister()), done_guarding(false) {
-    //assembler->trap();
+TypeRecorder* Rewriter2::getTypeRecorder() {
+    return rewrite->getTypeRecorder();
+}
+
+Rewriter2::Rewriter2(ICSlotRewrite* rewrite, int num_args, const std::vector<int>& live_outs)
+    : rewrite(rewrite), assembler(rewrite->getAssembler()), return_location(rewrite->returnRegister()),
+      done_guarding(false) {
+    // assembler->trap();
 
     for (int i = 0; i < num_args; i++) {
         Location l = Location::forArg(i);
-        RewriterVar2 *var = new RewriterVar2(this, l);
+        RewriterVar2* var = new RewriterVar2(this, l);
         vars_by_location[l] = var;
 
         args.push_back(var);
@@ -712,16 +737,16 @@ Rewriter2::Rewriter2(ICSlotRewrite* rewrite, int num_args, const std::vector<int
         assert(l != getReturnDestination());
 
         //// The return register is the only live-out that is not also a live-in.
-        //if (l == getReturnDestination()) {
-            //l.dump();
-            //continue;
+        // if (l == getReturnDestination()) {
+        // l.dump();
+        // continue;
         //}
 
         if (l.isClobberedByCall()) {
             rewriter_spillsavoided.log();
         }
 
-        RewriterVar2* &var = vars_by_location[l];
+        RewriterVar2*& var = vars_by_location[l];
         if (var) {
             var->incUse();
         } else {
@@ -734,7 +759,7 @@ Rewriter2::Rewriter2(ICSlotRewrite* rewrite, int num_args, const std::vector<int
 }
 
 Rewriter2* Rewriter2::createRewriter(void* rtn_addr, int num_args, const char* debug_name) {
-    ICInfo *ic = getICInfo(rtn_addr);
+    ICInfo* ic = getICInfo(rtn_addr);
 
     static StatCounter rewriter_nopatch("rewriter_nopatch");
 
@@ -745,5 +770,4 @@ Rewriter2* Rewriter2::createRewriter(void* rtn_addr, int num_args, const char* d
 
     return new Rewriter2(ic->startRewrite(debug_name), num_args, ic->getLiveOuts());
 }
-
 }

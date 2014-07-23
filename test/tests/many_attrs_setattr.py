@@ -1,3 +1,6 @@
+# expected: fail
+# - setattr() not supported
+
 class C(object):
     pass
 
@@ -7,6 +10,8 @@ n = 0
 while n < 100000:
     setattr(c, "a" + str(n), n)
     n = n + 1
+    if n % 1000 == 0:
+        print n
 
 def f(o):
     print o.a1

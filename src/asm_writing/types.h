@@ -1,11 +1,11 @@
 // Copyright (c) 2014 Dropbox, Inc.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,13 +36,9 @@ struct Register {
 
     bool isCalleeSave();
 
-    bool operator==(const Register &rhs) const {
-        return regnum == rhs.regnum;
-    }
+    bool operator==(const Register& rhs) const { return regnum == rhs.regnum; }
 
-    bool operator!=(const Register &rhs) const {
-        return !(*this == rhs);
-    }
+    bool operator!=(const Register& rhs) const { return !(*this == rhs); }
 
     void dump() const;
 };
@@ -69,11 +65,11 @@ inline bool Register::isCalleeSave() {
 }
 
 struct Indirect {
-    public:
-        const Register base;
-        const int offset;
+public:
+    const Register base;
+    const int offset;
 
-        Indirect(const Register base, int offset) : base(base), offset(offset) {}
+    Indirect(const Register base, int offset) : base(base), offset(offset) {}
 };
 
 struct XMMRegister {
@@ -81,13 +77,9 @@ struct XMMRegister {
 
     explicit constexpr XMMRegister(int regnum) : regnum(regnum) {}
 
-    bool operator==(const XMMRegister &rhs) const {
-        return regnum == rhs.regnum;
-    }
+    bool operator==(const XMMRegister& rhs) const { return regnum == rhs.regnum; }
 
-    bool operator!=(const XMMRegister &rhs) const {
-        return !(*this == rhs);
-    }
+    bool operator!=(const XMMRegister& rhs) const { return !(*this == rhs); }
 };
 
 const XMMRegister XMM0(0);
@@ -157,7 +149,6 @@ struct JumpDestination {
     constexpr JumpDestination(OffsetType type, int offset) : type(type), offset(offset) {}
     static JumpDestination fromStart(int offset) { return JumpDestination(FROM_START, offset); }
 };
-
 }
 }
 
